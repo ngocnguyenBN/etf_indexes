@@ -6,15 +6,15 @@
 # ..................................................................................................
 source("c:/R/TRAINEE_CONFIG.r", echo=T)
 
-try(source(paste0(SDLibrary, "TRAINEE_INTRO.R"),                                                echo=F))
+try(source(paste0('c:/R/', "TRAINEE_INTRO.R"),                                                echo=F))
 
-try(source(paste0(SDLibrary, "TRAINEE_LIBRARY.R"),                                              echo=F))
+try(source(paste0("D:/python/etf_indexes/Script/LIBRARY/TRAINEE_LIBRARY.R"),                                              echo=F))
 # try(source(paste0(SDLibrary, "TRAINEE_REPORT_LIBRARY.R"),                                       echo=F))
 # try(source(paste0(SDLibrary, "DBL_LIBRARY.R"),                                                  echo=F))
 # try(source(paste0(SDLibrary, "DBL_VOLATILITY_LIBRARY.R"),                                       echo=F))
 # try(source(paste0(SDLibrary, "IFRCBEQ_LIBRARY.R"),                                              echo=F))
 
-DBL_RELOAD_INSREF (ToForce = F)
+# DBL_RELOAD_INSREF (ToForce = F)
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # LOAD LIBRARY
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -29,7 +29,7 @@ IFRCBEQHG_MERGE_REF_ETFDB_BY_CODESOURCE = function(pSource = 'yah', pData = data
   
   
   # ins_ref = ins_ref [active != 0]
-  etf_ref = setDT(read.xlsx('H:/List/list_etfdb.xlsx'))
+  etf_ref = setDT(read.xlsx("D:/python/etf_indexes/List/list_etfdb.xlsx"))
   xRef = etf_ref[eval(parse(text=ParseFilter)), eval(parse(text=ParseFields))]
   
   xData = merge(xData[, -c('code','name')], xRef, all.x=T, by='codesource')
@@ -44,20 +44,33 @@ IFRCBEQHG_CALCULATE_CHANGE_RT_VARPC = function(dt = data.table()){
       dt = dt[order(code,date)]
       dt = unique(dt, by = c('code','date'))
       
+      
+      if ('close_adj' %in% names(dt)){
+        dt[, change := close_adj - shift(close_adj), by = 'code']
+        dt[, rt:= close_adj/shift(close_adj) - 1, by = 'code']
+        dt[, varpc:= 100*rt]
+      } else {
+        dt[, change := close - shift(close), by = 'code']
+        dt[, rt:= close/shift(close) - 1, by = 'code']
+        dt[, varpc:= 100*rt]
+      }
+      
     } else {
       dt = dt[order(codesource,date)]
       dt = unique(dt, by = c('codesource','date'))
+      
+      
+      if ('close_adj' %in% names(dt)){
+        dt[, change := close_adj - shift(close_adj), by = 'codesource']
+        dt[, rt:= close_adj/shift(close_adj) - 1, by = 'codesource']
+        dt[, varpc:= 100*rt]
+      } else {
+        dt[, change := close - shift(close), by = 'codesource']
+        dt[, rt:= close/shift(close) - 1, by = 'codesource']
+        dt[, varpc:= 100*rt]
+      }
     }
-    
-    if ('close_adj' %in% names(dt)){
-      dt[, change := close_adj - shift(close_adj), by = 'code']
-      dt[, rt:= close_adj/shift(close_adj) - 1, by = 'code']
-      dt[, varpc:= 100*rt]
-    } else {
-      dt[, change := close - shift(close), by = 'code']
-      dt[, rt:= close/shift(close) - 1, by = 'code']
-      dt[, varpc:= 100*rt]
-    }
+
   }
   return (dt)
 }
@@ -388,45 +401,58 @@ IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_LIST = function(list_code = list(), pSource = '
   final_data = data.table()
   xList = list()
   
-  for (i in 1:length(list_code)){
-    dt_download = data.table()
-    
-    Codesource = list_code[[i]]
-    
-    switch(pSource,
-           'yah' = {
-             if (nchar(Nbdays) == 0){
-               Nbdays = 10000
-             }
-             dt_download = CHECK_CLASS(try(IFRCBEQHG_DOWNLOAD_PRICES_YAH_BY_CODESOURCE(pCodesource = Codesource, pInterval="1d", pNbdays = Nbdays, ToKable=T, Hour_adjust = 0)))
-           },
-           'etfdb' = {
-             dt_download = CHECK_CLASS(try(IFRCBEQHG_DOWNLOAD_PRICES_ETFDB_BY_CODESOURCE(pCodesource = Codesource, pNbdays = Nbdays)))
-           },
-           'eik' = {
-             start_date = if (nchar(Nbdays) == 0) {
-               "1920-12-31"
-             } else {
-               as.character(Sys.Date() - as.numeric(Nbdays))
-             }
-             
-             dt_download = CHECK_CLASS(try(IFRCBEQHG_DOWNLOAD_PRICES_EIK_BY_CODESOURCE(pCodesource = Codesource, start = start_date, end = Sys.Date(), ToKable = T)))
-           },
-           'nasdaq' = {
-             if (nchar(Nbdays) == 0){
-               Nbdays = 100000
-             }
-             dt_download = CHECK_CLASS(try(IFRCBEQHG_DOWNLOAD_PRICES_NASDAQ_BY_CODESOURCE(pCodesource = Codesource, pNbdays = Nbdays)))
-           })
-    
-    if (nrow(dt_download) > 0){
-      dt_download = IFRCBEQHG_CLEAN_OHLC(dt_download)
-      dt_download = IFRCBEQHG_CLEAN_TIMESTAMP(dt_download)
-      xList[[i]] = dt_download
+  if (length(list_code) > 0){
+    for (i in 1:length(list_code)){
+      dt_download = data.table()
+      
+      Codesource = list_code[[i]]
+      
+      switch(pSource,
+             'yah' = {
+               if (nchar(Nbdays) == 0){
+                 Nbdays = 10000
+               }
+               dt_download = CHECK_CLASS(try(IFRCBEQHG_DOWNLOAD_PRICES_YAH_BY_CODESOURCE(pCodesource = Codesource, pInterval="1d", pNbdays = Nbdays, ToKable=T, Hour_adjust = 0)))
+             },
+             'etfdb' = {
+               dt_download = CHECK_CLASS(try(IFRCBEQHG_DOWNLOAD_PRICES_ETFDB_BY_CODESOURCE(pCodesource = Codesource, pNbdays = Nbdays)))
+             },
+             'eik' = {
+               start_date = if (nchar(Nbdays) == 0) {
+                 "1920-12-31"
+               } else {
+                 as.character(Sys.Date() - as.numeric(Nbdays))
+               }
+               
+               
+               dt_download = CHECK_CLASS(try(IFRCBEQHG_DOWNLOAD_PRICES_EIK_BY_CODESOURCE(pCodesource = Codesource, start = start_date, end = Sys.Date(), ToKable = T)))
+             },
+             'nasdaq' = {
+               if (nchar(Nbdays) == 0){
+                 Nbdays = 100000
+               }
+               dt_download = CHECK_CLASS(try(IFRCBEQHG_DOWNLOAD_PRICES_NASDAQ_BY_CODESOURCE(pCodesource = Codesource, pNbdays = Nbdays)))
+             })
+      
+      if (nrow(dt_download) > 0){
+        dt_download = IFRCBEQHG_CLEAN_OHLC(dt_download)
+        dt_download = IFRCBEQHG_CLEAN_TIMESTAMP(dt_download)
+        xList[[i]] = dt_download
+      } else {
+        file_code_not_correct = CHECK_CLASS(try(read.xlsx('D:/python/etf_indexes/List/list_codesource_not_correct.xlsx')))
+        etf_ref = setDT(read.xlsx("D:/python/etf_indexes/List/list_etfdb.xlsx"))
+        
+        dt_not_correct = data.table(source = pSource, codesource = Codesource)
+        dt_not_correct = try(IFRCBEQHG_MERGE_REF_ETFDB_BY_CODESOURCE(pSource, dt_not_correct))
+        file_code_not_correct = rbind(dt_not_correct, file_code_not_correct,fill = T)
+        file_code_not_correct = UPDATE_UPDATED(file_code_not_correct)
+        write.xlsx(file_code_not_correct, 'D:/python/etf_indexes/List/list_codesource_not_correct.xlsx')
+      }
+      
     }
-    
+    final_data = try(rbindlist(xList, fill = T))
   }
-  final_data = try(rbindlist(xList, fill = T))
+  
   return(final_data)
 }
 
@@ -475,7 +501,8 @@ IFRCBEQHG_WRITE_SUMMARY = function(pData=data.table(), pFileName, ToExclude=T, T
   {
     x.rds = pData
   } else {
-    x.rds     = try(read.csv(pFileName))
+    # x.rds     = try(read.csv(pFileName))
+    x.rds     = try(readRDS(pFileName))
   }
   if (all(class(x.rds)!='try-error') && nrow(x.rds)>0)
   {
@@ -537,7 +564,7 @@ IFRCBEQHG_WRITE_SUMMARY = function(pData=data.table(), pFileName, ToExclude=T, T
     my.summary = my.summary[order(-date, code)]
     if (ToPrompt) {My.Kable.TB(my.summary)}
     
-    my.FileTXT  = gsub(".csv", "_summary.txt", pFileName, ignore.case=T)
+    my.FileTXT  = gsub(".rds", "_summary.txt", pFileName, ignore.case=T)
     CATln(my.FileTXT)
     my.summary = my.summary[order(-date)]
     # my.summary = merge(my.summary[, -c("name", "type", "fcat")], ins_ref[, .(code, name=short_name, type, fcat)], by='code', all.x=T)
@@ -568,11 +595,13 @@ IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_SOURCE = function(pFolder = 'H:/Data/data_raw/'
   data_new               = data.table()
   list_download          = list_todo
   
-  file_history         = paste0(pFolder,'ifrcbeq_etf_',source,'_history.csv')
-  file_day             = paste0(pFolder,'ifrcbeq_etf_',source,'_prices.csv')
-  file_date            = paste0(pFolder,'ifrcbeq_etf_',source,'_prices_',gsub('-','',Sys.Date()),'.csv')
+  file_history         = paste0(pFolder,'ifrcbeq_etf_',source,'_history.rds')
+  file_day             = paste0(pFolder,'ifrcbeq_etf_',source,'_prices.rds')
+  file_date            = paste0(pFolder,'ifrcbeq_etf_',source,'_prices_',gsub('-','',Sys.Date()),'.rds')
   
   file_history_summary = paste0(pFolder,'ifrcbeq_etf_',source,'_history_summary.txt')
+  
+  file_code_not_correct = CHECK_CLASS(try(read.xlsx('D:/python/etf_indexes/List/list_codesource_not_correct.xlsx')))
   
   if (file.exists(file_history_summary)){
     dt_summary = setDT(fread(file_history_summary))
@@ -581,8 +610,11 @@ IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_SOURCE = function(pFolder = 'H:/Data/data_raw/'
     
     list_code_not_enough   = dt_summary[nb <= 100]$codesource
     list_code_not_download = c(list_code_not_download, list_code_not_enough)
+    
+    list_code_not_download = list(setdiff(unlist(list_code_not_download), unlist(file_code_not_correct[source == source]$codesource)))[[1]]
+    
     if (length(list_code_not_download) > 0){
-      # data_new = CHECK_CLASS(try(IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_LIST (list_code = list_code_not_download, pSource = source, Nbdays = '')))
+      data_new = CHECK_CLASS(try(IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_LIST (list_code = list_code_not_download, pSource = source, Nbdays = '')))
     }
     
     nbDay_download = 30
@@ -595,7 +627,7 @@ IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_SOURCE = function(pFolder = 'H:/Data/data_raw/'
   data = unique(rbind(data, data_new, fill = T), by = c('code','date'))
   
   # RBIND DATE
-  data_old = CHECK_CLASS(try(setDT(fread(file_date))))
+  data_old = CHECK_CLASS(try(setDT(readRDS(file_date))))
   if (nrow(data_old) > 0){
     data_old = IFRCBEQHG_CLEAN_OHLC(data_old)
     data_old = IFRCBEQHG_CLEAN_TIMESTAMP(data_old)
@@ -603,16 +635,18 @@ IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_SOURCE = function(pFolder = 'H:/Data/data_raw/'
     data[, date := as.Date(date)]
     
     data_old[, updated := as.character(updated)]
-    data = unique(rbind(data, data_old, fill = T), by = c('code','date'))
-    data = data[order(code,date)]
+    data_old = unique(rbind(data, data_old, fill = T), by = c('code','date'))
+    data_old = data_old[order(code,date)]
     
-    fwrite(data, file_day)
-    fwrite(data, file_date)
-    try(IFRCBEQHG_WRITE_SUMMARY(pData = data, file_day))
+    # fwrite(data, file_day)
+    # fwrite(data, file_date)
+    try(saveRDS(data_old, file_day))
+    try(saveRDS(data_old, file_date))
+    try(IFRCBEQHG_WRITE_SUMMARY(pData = data_old, file_day))
   } else {
-    fwrite(data, file_day)
-    fwrite(data, file_date)
-    try(IFRCBEQHG_WRITE_SUMMARY(pData = data, file_day))
+    try(saveRDS(data_old, file_day))
+    try(saveRDS(data_old, file_date))
+    try(IFRCBEQHG_WRITE_SUMMARY(pData = data_old, file_day))
   }
   
   # RBIND HISTORY
@@ -621,28 +655,32 @@ IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_SOURCE = function(pFolder = 'H:/Data/data_raw/'
     current_time    = Sys.time()
     file_mtime      = file_info$mtime
     time_diff_hours = as.numeric(difftime(current_time, file_mtime, units = "hours"))
-    if (time_diff_hours >= 0.5) {
-      data_history = CHECK_CLASS(try(setDT(fread(file_history))))
+    if (time_diff_hours >= 0) {
+      data_history = CHECK_CLASS(try(setDT(readRDS(file_history))))
       data_history[, date := as.Date(date)]
       data_history[, updated := as.character(updated)]
       data_history = IFRCBEQHG_CLEAN_OHLC(data_history)
       data_history = IFRCBEQHG_CLEAN_TIMESTAMP(data_history)
       data_history = unique(rbind(data_history, data, fill = T), by = c('code','date'))
       
-      try(fwrite(data_history, file_history))
+      # try(fwrite(data_history, file_file_historyhistory))
+      try(saveRDS(data_history, file_history))
       try(IFRCBEQHG_WRITE_SUMMARY(pData = data_history, file_history))
       
     } 
   } else {
-    fwrite(data, file_history)
+    data_history = data_old
+    try(saveRDS(data_history, file_history))
     try(IFRCBEQHG_WRITE_SUMMARY(pData = data, file_history))
   }
   
   return (data)
 }
 
+# IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_OPTION (Folder = 'H:/Monitor/', pOption = '', list_source = list('YAH','ETFDB','NASDAQ'))
+
 # ==================================================================================================
-IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_OPTION = function(Folder = 'H:/Monitor/', pOption = '', list_source = list('YAH', 'ETFDB', 'EIK')){
+IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_OPTION = function(Folder = 'H:/Data/data_raw/', pOption = '', list_source = list( 'NASDAQ')){
   # ------------------------------------------------------------------------------------------------
   pMyPC = toupper(as.character(try(fread("C:/R/my_pc.txt", header = F))))
   
@@ -650,13 +688,14 @@ IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_OPTION = function(Folder = 'H:/Monitor/', pOpti
   
   list_todo = try(IFRCBEQHG_SPLIT_DATA_TABLE(list_code, ifelse(nrow(list_code) >= 50, 50, nrow(list_code))))
   
+  
   for (i in 1:length(list_todo)){
     # i = 1
     list_i = list_todo[[i]]
     
     
     for (k in 1:length(list_source)){
-      # k = 2
+      # k = 1
       list_download = list()
       pSource = tolower(list_source[[k]])
       
@@ -668,12 +707,30 @@ IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_OPTION = function(Folder = 'H:/Monitor/', pOpti
         message(sprintf("Column '%s' not found in list_todo[[%d]]", pSource, i))
       }
       
+      is_blocked = tryCatch({
+        IFRCBEQHG_CHECK_DOWNLOAD_PC_BY_SOURCE(toupper(pSource))
+      }, error = function(e) {
+        message(sprintf("Error checking source '%s': %s", pSource, e$message))
+        TRUE
+      })
+      
+      if (is_blocked) {
+        message(sprintf("Source '%s' is blocked. Skipping...", pSource))
+        next
+      }
+      
+      
       if (length(list_download) > 0){
         if (pSource == 'eik' & pMyPC %in% list('BEQ-INDEX')){
-          dt = try(IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_SOURCE (pFolder = 'H:/Data/data_raw/', source = pSource, list_todo = list_download))
+          
+          library(Refinitiv)
+          # if (!exists('RD')){}
+          RD <- RDConnect(application_id =  "0e5ab9d05f624c0eb37fbf17af88d96502cabda8",  PythonModule = "RD")
+          
+          dt = try(IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_SOURCE (pFolder = Folder, source = 'eik', list_todo = list_download))
         } else {
           if (pSource != 'eik'){
-            lock_file = paste0(Folder,pSource,"_waiting_", i, ".lock")
+            lock_file = paste0('H:/Monitor/',pSource,"_waiting_", i, ".lock")
             
             if (file.exists(lock_file)) {
               file_info = file.info(lock_file)
@@ -686,7 +743,7 @@ IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_OPTION = function(Folder = 'H:/Monitor/', pOpti
             
             if (!file.exists(lock_file) && file.create(lock_file)) {
               
-              dt = try(IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_SOURCE (pFolder = 'H:/Data/data_raw/', source = pSource, list_todo = list_download))
+              dt = try(IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_SOURCE (pFolder = Folder, source = pSource, list_todo = list_download))
               
               file.remove(lock_file)
             } 
@@ -697,10 +754,7 @@ IFRCBEQHG_DOWNLOAD_PRICES_ETF_BY_OPTION = function(Folder = 'H:/Monitor/', pOpti
       
     }
   }
-  
-  
 }
-
 
 # ==================================================================================================
 IFRCBEQHG_DOWNLOAD_PRICES_NASDAQ_BY_CODESOURCE = function(pCodesource = 'IBIT', pNbdays = 100000){
@@ -748,18 +802,21 @@ IFRCBEQHG_CHECK_DOWNLOAD_PC_BY_SOURCE = function (pSource = 'YAH')  {
   # ------------------------------------------------------------------------------------------------
   TO_DO = F
   xData = data.table()
-  Codesource = 'IBIT'
   switch (pSource,
           'YAH' = {
+            Codesource = 'IBIT'
             dt_download = CHECK_CLASS(try(IFRCBEQHG_DOWNLOAD_PRICES_YAH_BY_CODESOURCE(pCodesource = Codesource, pInterval="1d", pNbdays = 1000, ToKable=T, Hour_adjust = 0)))
           },
           'EIK' = {
+            Codesource = "AIEQ.K"
             dt_download = CHECK_CLASS(try(IFRCBEQHG_DOWNLOAD_PRICES_EIK_BY_CODESOURCE(pCodesource = Codesource, start = "1920-12-31", end = Sys.Date(), ToKable = T)))
           },
           'ETFDB' = {
+            Codesource = 'IBIT'
             dt_download = CHECK_CLASS(try(IFRCBEQHG_DOWNLOAD_PRICES_ETFDB_BY_CODESOURCE(pCodesource = Codesource, pNbdays = 100)))
           },
           'NASDAQ' = {
+            Codesource = 'IBIT'
             dt_download = CHECK_CLASS(try(IFRCBEQHG_DOWNLOAD_PRICES_NASDAQ_BY_CODESOURCE(pCodesource = Codesource, pNbdays = 100)))
           }
   )
@@ -770,4 +827,5 @@ IFRCBEQHG_CHECK_DOWNLOAD_PC_BY_SOURCE = function (pSource = 'YAH')  {
   CATln_Border(paste ('CHECK DOWNLOAD: SOURCE = ',pSource, '|', "RESULT = ", as.character(TO_DO)))
   return(TO_DO)
 }
-
+# task scheduler
+# https://youtu.be/UDKy5_SQy2o
